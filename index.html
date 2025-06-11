@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake.io Prototype</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas {
+      background: #111;
+      border: 2px solid #fff;
+    }
+    #controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      background: #333;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      font-size: 20px;
+      border-radius: 8px;
+    }
+    .btn:active {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="controls">
+  <button class="btn" onclick="changeDir('ArrowUp')">⬆️</button>
+  <button class="btn" onclick="changeDir('ArrowLeft')">⬅️</button>
+  <button class="btn" onclick="changeDir('ArrowDown')">⬇️</button>
+  <button class="btn" onclick="changeDir('ArrowRight')">➡️</button>
+</div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Dynamische canvas grootte
+function resizeCanvas() {
+  canvas.width = Math.min(window.innerWidth - 20, 800);
+  canvas.height = Math.min(window.innerHeight - 120, 600);
+  cols = Math.floor(canvas.width / gridSize);
+  rows = Math.floor(canvas.height / gridSize);
+}
+
+let gridSize = 20;
+let cols = 40;
+let rows = 30;
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const food = [];
+function spawnFood() {
+  food.push({
+    x: Math.floor(Math.random() * cols),
+    y: Math.floor(Math.random() * rows)
+  });
+}
+
+for (let i = 0; i < 10; i++) spawnFood();
+
+let gameTick = 0;
+let snakesEaten = 0;
+let winDisplayed = false;
+
+class Snake {
+  constructor(id, isPlayer = false) {
+    this.id = id;
+    this.body = [
+      { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }
+    ];
+    this.dir = { x: 1, y: 0 };
+    this.isPlayer = isPlayer;
+    this.color = isPlayer ? 'lime' : 'cyan';
+    this.alive = true;
+    this.tickOffset = Math.floor(Math.random() * 10);
+  }
+
+  changeDir(newDir) {
+    this.dir = newDir;
+  }
+
+  move() {
+    if ((gameTick + this.tickOffset) % 12 !== 0) return;
+    const head = this.body[0];
+    const newHead = {
+      x: (head.x + this.dir.x + cols) % cols,
+      y: (head.y + this.dir.y + rows) % rows
+    };
+
+    for (let other of snakes) {
+      if (!other.alive || other === this) continue;
+      for (let i = this.isPlayer ? 1 : 0; i < other.body.length; i++) {
+        if (newHead.x === other.body[i].x && newHead.y === other.body[i].y) {
+          if (this.isPlayer) {
+            other.alive = false;
+            snakesEaten++;
+            for (let j = 0; j < other.body.length; j++) {
+              this.body.push({ ...this.body[this.body.length - 1] });
+            }
+          }
+          return;
+        }
+      }
+    }
+
+    this.body.unshift(newHead);
+    const eaten = food.findIndex(f => f.x === newHead.x && f.y === newHead.y);
+    if (eaten !== -1) {
+      food.splice(eaten, 1);
+      spawnFood();
+    } else {
+      this.body.pop();
+    }
+  }
+
+  autoMove() {
+    if (Math.random() < 0.01) {
+      const dirs = [
+        { x: 1, y: 0 },
+        { x: -1, y: 0 },
+        { x: 0, y: 1 },
+        { x: 0, y: -1 }
+      ];
+      this.dir = dirs[Math.floor(Math.random() * dirs.length)];
+    }
+  }
+
+  draw() {
+    if (!this.alive) return;
+    ctx.fillStyle = this.color;
+    for (let i = 0; i < this.body.length; i++) {
+      ctx.fillRect(this.body[i].x * gridSize, this.body[i].y * gridSize, gridSize, gridSize);
+      ctx.fillStyle = 'white';
+      ctx.font = '12px Arial';
+      ctx.fillText(this.id, this.body[i].x * gridSize + 4, this.body[i].y * gridSize + 14);
+      ctx.fillStyle = this.color;
+    }
+  }
+}
+
+const snakes = [new Snake(1, true)];
+for (let i = 2; i <= 10; i++) {
+  snakes.push(new Snake(i));
+}
+
+const keyDirs = {
+  ArrowUp:    { x: 0, y: -1 },
+  ArrowDown:  { x: 0, y: 1 },
+  ArrowLeft:  { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 }
+};
+
+document.addEventListener('keydown', e => {
+  if (keyDirs[e.key]) {
+    snakes[0].changeDir(keyDirs[e.key]);
+  }
+});
+
+function changeDir(key) {
+  if (keyDirs[key]) {
+    snakes[0].changeDir(keyDirs[key]);
+  }
+}
+
+function drawWinMessage() {
+  ctx.fillStyle = 'white';
+  ctx.font = '30px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('GEFELICITEERD JE HEBT ALLE STAPPEN GEPAKT!', canvas.width / 2, canvas.height / 2);
+  setTimeout(() => {
+    alert('Gefeliciteerd je hebt alle stappen te pakken!');
+  }, 200);
+}
+
+function gameLoop() {
+  gameTick++;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = 'red';
+  for (let f of food) {
+    ctx.fillRect(f.x * gridSize, f.y * gridSize, gridSize, gridSize);
+  }
+
+  for (let snake of snakes) {
+    if (!snake.alive) continue;
+    if (!snake.isPlayer) snake.autoMove();
+    snake.move();
+    snake.draw();
+  }
+
+  if (snakesEaten >= 9 && !winDisplayed) {
+    winDisplayed = true;
+    drawWinMessage();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
